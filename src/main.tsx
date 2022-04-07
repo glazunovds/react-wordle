@@ -15,7 +15,8 @@ const GlobalStyle = createGlobalStyle`
   }
 
   * {
-    font-family: "Comic Sans MS", serif !important;
+    //font-family: "Comic Sans MS", serif !important;
+    font-family: "Lobster", serif !important;
 
     color: white;
     //font-family: Roboto,serif;

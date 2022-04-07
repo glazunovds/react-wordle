@@ -1,31 +1,16 @@
 import EqualizerIcon from '@mui/icons-material/Equalizer';
 import SettingsIcon from '@mui/icons-material/Settings';
-import {
-	Button,
-	Checkbox,
-	Dialog,
-	DialogActions,
-	DialogContent,
-	DialogContentText,
-	DialogTitle,
-	List,
-	ListItem,
-	SvgIcon,
-} from '@mui/material';
-import useAxios from 'axios-hooks';
+import { SvgIcon } from '@mui/material';
 import produce from 'immer';
 import * as moment from 'moment';
 import React, { FC, useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components';
 
+import EndGameDialog from './app/dialogs/EndGameDialog';
+import StatisticsDialog from './app/dialogs/StatisticsDialog';
 import Field from './app/field';
 import Keyboard from './app/keyboard';
 import { ALL_WORDS, EVERYDAY_WORDS } from './data';
-
-interface Statistics {
-	played: number;
-	won: number;
-}
 
 interface BoardState {
 	date: string;
@@ -49,6 +34,7 @@ const App: FC = () => {
 	const [openSettings, setOpenSettings] = useState(false);
 	const [hardMode, setHardMode] = useState(false);
 	const [winGame, setWinGame] = useState<boolean | null>(null);
+	const [todayDate] = useState(moment().format('DD.MM.YYYY'));
 
 	const handleClickOpen = () => {
 		setOpenStats(true);
@@ -65,6 +51,37 @@ const App: FC = () => {
 	const handleCloseSettings = () => {
 		setOpenSettings(false);
 	};
+
+	function* chunks(arr: string[], n: number) {
+		for (let i = 0; i < arr.length; i += n) {
+			yield arr.slice(i, i + n);
+		}
+	}
+
+	const handleShare = useCallback(() => {
+		const squaresArr = [...document.querySelectorAll('.field-item')].map((e: Element) => {
+			if (
+				e.classList.contains('existing-symbol') &&
+				!e.classList.contains('correct-symbol')
+			) {
+				return '🟨';
+			}
+			if (e.classList.contains('correct-symbol')) {
+				return '🟩';
+			}
+			return '⬛';
+		});
+		const chunksBy5 = [...chunks(squaresArr, 5)];
+		const resultArr = chunksBy5
+			.map((arr) => {
+				arr.push('\n');
+				return arr;
+			})
+			.flat(1);
+		void navigator.clipboard.writeText(
+			`Всратый вордле \n${winGame ? active : 'X'} из 6 \n${resultArr.join('')}`,
+		);
+	}, [active, winGame]);
 
 	const updateStateToLocalStorage = useCallback(() => {
 		const boardState = localStorage.getItem('boardState');
@@ -84,32 +101,39 @@ const App: FC = () => {
 		localStorage.setItem('hardMode', JSON.stringify(hardMode));
 	}, [field, hardMode, now]);
 
-	const updateStatisticsToLocalStorage = useCallback((win: boolean) => {
-		//check date before add
-		const statistics = localStorage.getItem('statistics');
-		const { played, won } = JSON.parse(
-			statistics ?? JSON.stringify({ played: 0, won: 0 }),
-		) as Statistics;
-		localStorage.setItem(
-			'statistics',
-			JSON.stringify({
-				played: played + 1,
-				won: win ? won + 1 : won,
-			}),
-		);
-	}, []);
+	const updateStatisticsToLocalStorage = useCallback(
+		(win: boolean) => {
+			const itemFromStorage = localStorage.getItem('statistics');
+			const statisticsMap = itemFromStorage
+				? new Map(JSON.parse(itemFromStorage) as [])
+				: new Map().set(todayDate, win);
+			statisticsMap.set(todayDate, win);
+			localStorage.setItem('statistics', JSON.stringify([...statisticsMap.entries()]));
+		},
+		[todayDate],
+	);
 
-	const getLocalstorageStatistics = () => {
-		const statistics = localStorage.getItem('statistics');
-		return JSON.parse(statistics ?? JSON.stringify({ played: 0, won: 0 })) as Statistics;
-	};
+	const getLocalstorageStatistics = useCallback(() => {
+		const itemFromStorage = localStorage.getItem('statistics');
+		if (!itemFromStorage) return { played: 0, won: 0, winrate: '0 %', isWonToday: null };
+		const statisticsMap = new Map(JSON.parse(itemFromStorage) as []);
+		const todayStatistics = statisticsMap.get(todayDate);
+		const totalWon = [...statisticsMap].filter((e) => e[1]).length;
+		const winrate = `${Math.round((totalWon / statisticsMap.size) * 100)} %`;
+		return {
+			played: statisticsMap.size,
+			won: totalWon,
+			winrate: winrate,
+			isWonToday: todayStatistics,
+		};
+	}, [todayDate]);
 
-	const getRandomWordleWord = () => {
+	const getRandomWordleWord = useCallback(() => {
 		const dateDiff = moment('19.06.2021', 'DD.MM.YYYY')
 			.startOf('day')
 			.diff(moment().startOf('day'));
 		return Math.abs(Math.round(dateDiff / 864e5));
-	};
+	}, []);
 
 	const handleBackspace = useCallback(() => {
 		if (blockInput) return;
@@ -244,7 +268,14 @@ const App: FC = () => {
 			}
 			return actualField;
 		});
-	}, [blockInput, active, field, updateStateToLocalStorage, updateStatisticsToLocalStorage]);
+	}, [
+		blockInput,
+		getRandomWordleWord,
+		active,
+		field,
+		updateStatisticsToLocalStorage,
+		updateStateToLocalStorage,
+	]);
 
 	useEffect(() => {
 		const boardState = localStorage.getItem('boardState');
@@ -264,7 +295,7 @@ const App: FC = () => {
 				if (index === nowBoardState.state.length) clearInterval(interval);
 			}, 50 * 5);
 		}
-	}, [now]);
+	}, [getRandomWordleWord, now]);
 
 	useEffect(() => {
 		const handleKeyDownEvent = (event: KeyboardEvent) => {
@@ -319,58 +350,21 @@ const App: FC = () => {
 					notFoundKeys={notFoundKeys}
 					hardMode={hardMode}
 				/>
-				<Dialog open={openStats} onClose={handleClose} className='win-dialog dialog'>
-					<DialogTitle>
-						{winGame !== null ? (winGame ? 'Харош' : 'Луз') : 'Статистика'}
-					</DialogTitle>
-					<DialogContent>
-						<DialogContentText>
-							Всего игр: {getLocalstorageStatistics().played}
-						</DialogContentText>
-						<DialogContentText>
-							Побед: {getLocalstorageStatistics().won}
-						</DialogContentText>
-						<DialogContentText>
-							Winrate:{' '}
-							{Math.round(
-								(getLocalstorageStatistics().won /
-									getLocalstorageStatistics().played) *
-									100,
-							)}{' '}
-							%
-						</DialogContentText>
-					</DialogContent>
-					<DialogActions>
-						<Button onClick={handleClose}>Close</Button>
-					</DialogActions>
-				</Dialog>
-				<Dialog
-					open={openSettings}
-					onClose={handleCloseSettings}
-					className='settings-dialog dialog'
-				>
-					<DialogTitle>Settings</DialogTitle>
-					<DialogContent>
-						<List>
-							<ListItem>
-								<DialogContentText>Hard mode</DialogContentText>
-								<Checkbox
-									checked={hardMode}
-									onChange={(event) => {
-										setHardMode(event.target.checked);
-									}}
-								/>
-							</ListItem>
-							<ListItem>
-								<DialogContentText>Dark mode</DialogContentText>
-								<Checkbox />
-							</ListItem>
-						</List>
-					</DialogContent>
-					<DialogActions>
-						<Button onClick={handleCloseSettings}>Close</Button>
-					</DialogActions>
-				</Dialog>
+				<StatisticsDialog
+					openStats={openStats}
+					handleClose={handleClose}
+					winGame={winGame}
+					handleShare={handleShare}
+					played={getLocalstorageStatistics().played}
+					wins={getLocalstorageStatistics().won}
+					winrate={getLocalstorageStatistics().winrate}
+				/>
+				<EndGameDialog
+					handleCloseSettings={handleCloseSettings}
+					hardMode={hardMode}
+					openSettings={openSettings}
+					setHardMode={setHardMode}
+				/>
 			</Wrapper>
 		</Root>
 	);
@@ -387,18 +381,21 @@ const Root = styled.div`
 		font-size: 36px;
 		border-bottom: 1px solid #3a3a3a;
 		font-weight: bold;
+
 		.title {
 			flex: 1 1;
 			justify-content: center;
 			display: flex;
 			padding-left: 80px;
 		}
+
 		.links {
 			display: flex;
 			width: 65px;
 			padding-right: 15px;
 			justify-content: space-between;
 			align-items: center;
+
 			.button-icon:hover {
 				cursor: pointer;
 				transform: scale(1.1);
@@ -410,6 +407,7 @@ const Wrapper = styled.div`
 	display: flex;
 	flex-direction: column;
 	height: calc(100% - 71px);
+
 	.win-dialog .MuiPaper-root {
 		border-radius: 8px;
 		border: 1px solid #1a1a1a;
@@ -417,13 +415,16 @@ const Wrapper = styled.div`
 		color: white;
 		box-shadow: 0 4px 23px 0 rgb(0 0 0 / 20%);
 	}
+
 	.fill-remaining-space {
 		flex-grow: 1;
 	}
+
 	.invalid-row {
 		animation-name: Shake;
 		animation-duration: 600ms;
 	}
+
 	.win {
 		animation-name: Bounce;
 		animation-duration: 1000ms;
@@ -432,12 +433,15 @@ const Wrapper = styled.div`
 	.field-row .existing-symbol {
 		background: #b59f3b;
 	}
+
 	.field-row .not-found-symbol {
 		background: #3a3a3c;
 	}
+
 	.field-row .correct-symbol {
 		background: #538d4e;
 	}
+
 	@keyframes Bounce {
 		0%,
 		20% {
@@ -482,12 +486,14 @@ const Wrapper = styled.div`
 			transform: translateX(4px);
 		}
 	}
+
 	.my-animation {
 		animation-name: CardAnimation;
 		animation-duration: 600ms;
 		animation-timing-function: ease-in;
 		transition: background-color 1s ease;
 	}
+
 	@keyframes CardAnimation {
 		0% {
 			transform: scale(0.8);
@@ -516,11 +522,13 @@ const Wrapper = styled.div`
 			transform: rotateX(0);
 		}
 	}
+
 	.flip-out {
 		animation-name: FlipOut;
 		animation-duration: 250ms;
 		animation-timing-function: ease-in;
 	}
+
 	@keyframes FlipOut {
 		0% {
 			transform: rotateX(-90deg);

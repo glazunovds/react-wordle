@@ -1,8 +1,8 @@
+import AnchorIcon from '@mui/icons-material/Anchor';
 import BackspaceIcon from '@mui/icons-material/Backspace';
 import { SvgIcon } from '@mui/material';
 import { FC, MouseEvent } from 'react';
 import styled from 'styled-components';
-import { v4 as uuid } from 'uuid';
 
 type PropsType = {
 	handleSymbol: (key: string) => void;
@@ -36,7 +36,7 @@ const Keyboard: FC<PropsType> = ({
 					<div key={i} className='keyboard-row'>
 						{i === 2 && (
 							<div className='keyboard-symbol enter-button' onClick={handleEnter}>
-								<span>Enter</span>
+								<SvgIcon component={AnchorIcon} />
 							</div>
 						)}
 						{[...row].map((symbol) => {

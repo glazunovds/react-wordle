@@ -1,6 +1,5 @@
 import { FC } from 'react';
 import styled from 'styled-components';
-import { v4 as uuid } from 'uuid';
 
 type PropsType = {
 	field: string[][];
@@ -30,11 +29,14 @@ const Root = styled.div`
 	align-self: center;
 	flex-direction: column;
 	padding: 40px 0;
+
 	.field-row {
 		display: inline-flex;
+
 		.not-empty {
 			border-color: #565758 !important;
 		}
+
 		.field-item {
 			width: 60px;
 			height: 60px;
