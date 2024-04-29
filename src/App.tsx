@@ -2,7 +2,7 @@ import EqualizerIcon from '@mui/icons-material/Equalizer';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { SvgIcon } from '@mui/material';
 import produce from 'immer';
-import * as moment from 'moment';
+import moment from 'moment';
 import React, { FC, useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components';
 
